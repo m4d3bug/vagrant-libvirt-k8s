@@ -1,0 +1,131 @@
+---
+- hosts: all
+  become: true
+  tasks:
+  - name: Install packages that allow yum to be used over HTTPS
+    yum:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - yum-utils
+      - net-tools
+      - vim
+      - curl
+      - nano
+      - epel-release
+      - strace
+
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+
+  - name: Disable firewalld
+    systemd:
+      name: firewalld
+      enabled: no
+      state: stopped
+
+  - name: Add an yum repository for Docker stable version
+    shell: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+  - name: Install docker and its dependecies
+    yum: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - docker-ce 
+      - docker-ce-cli 
+      - containerd.io
+
+  - name: Creating a new directory
+    file:
+      path: "/etc/docker"
+      state: directory
+
+  - name: Creating custome docker config
+    copy:
+      src: daemon.json
+      dest: "/etc/docker/daemon.json"
+
+  - name: Add vagrant user to docker group
+    user:
+      name: vagrant
+      group: docker
+
+  - name: Restarting docker
+    systemd: 
+      daemon_reload: yes
+      name: docker 
+      state: started
+      enabled: yes
+
+  - name: Remove swapfile from /etc/fstab
+    mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+
+  - name: Disable swap
+    command: swapoff -a
+    when: ansible_swaptotal_mb > 0
+
+  - name: Adding yum repository for Kubernetes
+    yum_repository:
+      name: kubernetes
+      baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+      enabled: yes 
+      gpgcheck: yes
+      repo_gpgcheck: 1
+      description: Repository of Kubernetes
+      gpgkey: https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+      state: present
+      file: kubernetes
+
+  - name: Install Kubernetes binaries
+    yum: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+      - kubelet 
+      - kubeadm 
+      - kubectl
+
+  - name: starting kubelet
+    systemd:
+      name: kubelet
+      state: started
+      enabled: yes
+
+  - name: Initialize the Kubernetes cluster using kubeadm
+    command: kubeadm init --apiserver-advertise-address="192.168.122.10" --apiserver-cert-extra-sans="192.168.122.10"  --node-name k8s-master --pod-network-cidr=10.244.0.0/16
+
+  - name: Setup kubeconfig for vagrant user
+    command: "{{ item }}"
+    with_items:
+     - mkdir -p /home/vagrant/.kube
+     - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+     - chown vagrant:vagrant /home/vagrant/.kube/config
+
+  - name: Install calico pod network
+    become: false
+    command: kubectl create -f https://docs.projectcalico.org/manifests/calico.yaml
+
+  - name: Generate join command
+    command: kubeadm token create --print-join-command
+    register: join_command
+
+  - name: Copy join command to local file
+    delegate_to: localhost
+    copy:
+      content: "{{ join_command.stdout_lines[0] }}"
+      dest: "./join-command"
+
