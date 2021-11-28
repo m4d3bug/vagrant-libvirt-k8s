@@ -1,5 +1,5 @@
 IMAGE_NAME = "generic/centos7"
-N = 2
+WORKER_N = 2
 
 Vagrant.configure("2") do |config|
     config.ssh.insert_key = false
@@ -14,16 +14,27 @@ Vagrant.configure("2") do |config|
         master.vm.network "private_network", ip: "192.168.122.10"
         master.vm.hostname = "k8s-master"
         master.vm.provision "ansible" do |ansible|
+            ansible.playbook = "kubernetes-setup/prepare-playbook.yml"
+            ansible.verbose = "vvv"
+        end
+
+        master.vm.provision "ansible" do |ansible|
             ansible.playbook = "kubernetes-setup/master-playbook.yml"
             ansible.verbose = "vvv"
         end
     end
 
-    (1..N).each do |i|
+    (1..WORKER_N).each do |i|
         config.vm.define "node-#{i}" do |node|
             node.vm.box = IMAGE_NAME
             node.vm.network "private_network", ip: "192.168.122.#{i + 10}"
             node.vm.hostname = "node-#{i}"
+
+            node.vm.provision "ansible" do |ansible|
+                ansible.playbook = "kubernetes-setup/prepare-playbook.yml"
+                ansible.verbose = "vvv"
+            end
+
             node.vm.provision "ansible" do |ansible|
                 ansible.playbook = "kubernetes-setup/node-playbook.yml"
             	ansible.verbose = "vvv"
