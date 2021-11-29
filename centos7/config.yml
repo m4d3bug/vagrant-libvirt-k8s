@@ -1,0 +1,23 @@
+---
+image: "generic/centos7"
+default_prefix: "06-"
+ip_part: "192.169.122"
+
+cluster:
+  master: "master-node"
+  worker: "worker-node"
+
+resources:
+  master:
+      cpus: 2
+      memory: 4096
+      storage_pool: "default"
+      virtual_size: 150
+  worker:
+      cpus: 4
+      memory: 8192
+      storage_pool: "default"
+      virtual_size: 150
+      size: "399G"
+      type: "qcow2"
+      count: 2

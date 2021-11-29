@@ -1,42 +1,73 @@
-IMAGE_NAME = "generic/centos7"
-WORKER_N = 2
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+require 'yaml'
+
+k8s = YAML.load_file(File.join(File.dirname(__FILE__), 'config.yml'))
+ENV["LC_ALL"] = "en_US.UTF-8"
 
 Vagrant.configure("2") do |config|
     config.ssh.insert_key = false
 
-    config.vm.provider "libvirt" do |v|
-        v.memory = 4096
-        v.cpus = 2
-    end
-
-    config.vm.define "k8s-master" do |master|
-        master.vm.box = IMAGE_NAME
+    config.vm.define "#{k8s['cluster']['master']}" do |master|
+        master.vm.box = k8s['image']
         master.vm.network "private_network", ip: "192.168.122.10"
-        master.vm.hostname = "k8s-master"
+        master.vm.hostname = "#{k8s['cluster']['master']}"
+        master.vm.provider "libvirt" do |v|
+            v.default_prefix = k8s['default_prefix']
+            v.memory = k8s['resources']['master']['memory']
+            v.cpus = k8s['resources']['master']['cpus']
+            v.machine_virtual_size = k8s['resources']['master']['virtual_size']
+        end
+
+	# Hostfile :: Master node
+    	master.vm.provision "master-hostfile", type: "shell" do |mhf|
+	    mhf.inline = <<-SHELL
+	    	    echo -e "127.0.0.1\t$2" | tee -a /etc/hosts; echo -e "$1\t$2" | tee -a /etc/hosts
+	    SHELL
+	    mhf.args = ["#{k8s['ip_part']}.10", "#{k8s['cluster']['master']}"]
+    	end
+    	# Hostfile :: Worker node
+    	master.vm.provision "Update hostfile and authorized_keys", type: "shell" do |whu|
+	    whu.inline = <<-SHELL
+	    	    for i in $(eval echo {1..$2}); do 
+			    echo -e "${3}.$((10 + $i))\t#{k8s['cluster']['worker']}-${i}" | tee -a /etc/hosts
+	    	    done
+	    SHELL
+	    whu.args   = ["#{k8s['user']}", "#{k8s['resources']['worker']['count']}", "#{k8s['ip_part']}"]
+    	end
+
         master.vm.provision "ansible" do |ansible|
             ansible.playbook = "kubernetes-setup/prepare-playbook.yml"
+            ansible.raw_arguments = "--forks=45"
             ansible.verbose = "vvv"
         end
 
         master.vm.provision "ansible" do |ansible|
             ansible.playbook = "kubernetes-setup/master-playbook.yml"
+            ansible.raw_arguments = "--forks=45"
             ansible.verbose = "vvv"
         end
     end
 
-    (1..WORKER_N).each do |i|
-        config.vm.define "node-#{i}" do |node|
-            node.vm.box = IMAGE_NAME
-            node.vm.network "private_network", ip: "192.168.122.#{i + 10}"
-            node.vm.hostname = "node-#{i}"
+    (1..k8s['resources']['worker']['count']).each do |i|
+        config.vm.define "#{k8s['cluster']['worker']}-#{i}" do |worker|
+            worker.vm.box = k8s['image']
+            worker.vm.network "private_network", ip: "192.168.122.#{i + 10}"
+            worker.vm.hostname = "#{k8s['cluster']['worker']}-#{i}"
+            worker.vm.provider "libvirt" do |v|
+                v.default_prefix = k8s['default_prefix']
+                v.memory = k8s['resources']['worker']['memory']
+                v.cpus = k8s['resources']['worker']['cpus']
+            	v.machine_virtual_size = k8s['resources']['worker']['virtual_size']
+            end
 
-            node.vm.provision "ansible" do |ansible|
+            worker.vm.provision "ansible" do |ansible|
                 ansible.playbook = "kubernetes-setup/prepare-playbook.yml"
                 ansible.verbose = "vvv"
             end
 
-            node.vm.provision "ansible" do |ansible|
-                ansible.playbook = "kubernetes-setup/node-playbook.yml"
+            worker.vm.provision "ansible" do |ansible|
+                ansible.playbook = "kubernetes-setup/worker-playbook.yml"
             	ansible.verbose = "vvv"
             end
         end

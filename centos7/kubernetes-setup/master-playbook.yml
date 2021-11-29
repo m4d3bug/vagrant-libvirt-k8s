@@ -1,9 +1,11 @@
 ---
 - hosts: all
   become: true
+  gather_facts: false
+  vars_files: ../config.yml
   tasks:
   - name: Initialize the Kubernetes cluster using kubeadm
-    command: kubeadm init --apiserver-advertise-address="192.168.122.10" --apiserver-cert-extra-sans="192.168.122.10"  --node-name k8s-master --pod-network-cidr=10.244.0.0/16
+    command: kubeadm init --apiserver-advertise-address="192.168.122.10" --apiserver-cert-extra-sans="192.168.122.10"  --node-name {{ cluster['master'] }} --pod-network-cidr=10.244.0.0/16
 
   - name: Setup kubeconfig for vagrant user
     command: "{{ item }}"
@@ -15,6 +17,14 @@
   - name: Install calico pod network
     become: false
     command: kubectl create -f https://docs.projectcalico.org/manifests/calico.yaml
+
+  - name: Install metrics server
+    become: false
+    command: kubectl create -f https://img.madebug.net/scriptcamp/kubeadm-scripts/main/manifests/metrics-server.yaml
+
+  - name: Install kubernetes dashboard
+    become: false
+    command: kubectl create -f https://img.madebug.net/kubernetes/dashboard/v2.4.0/aio/deploy/recommended.yaml
 
   - name: Generate join command
     command: kubeadm token create --print-join-command

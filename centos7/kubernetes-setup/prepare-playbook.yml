@@ -1,6 +1,7 @@
 ---
 - hosts: all
   become: true
+  gather_facts: false
   tasks:
   - name: Install packages that allow yum to be used over HTTPS
     yum:
@@ -74,7 +75,7 @@
 
   - name: Disable swap
     command: swapoff -a
-    when: ansible_swaptotal_mb > 0
+      #    when: ansible_swaptotal_mb > 0
 
   - name: Adding yum repository for Kubernetes
     yum_repository:
