@@ -8,7 +8,7 @@ This module requires [Vagrant](https://www.vagrantup.com/docs/installation) to p
 And any virtual environment, defualt can use [libvirt](https://libvirt.org/)
 
 ## Basic usage
-Very first `cd` to path where `Vagrant` file exists, and open `Vagrantfile` file to update setting before spin up cluster.
+Very first `cd` to path where `Vagrantfile` exists, and open `Vagrantfile` file to update setting before spin up cluster.
 
 ### Command line
 To start kubernetes cluster please follow below instructions:
