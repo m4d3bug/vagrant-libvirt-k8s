@@ -14,5 +14,5 @@ Very first `cd` to path where `Vagrant` file exists, and open `Vagrantfile` file
 To start kubernetes cluster please follow below instructions:
 
 ```bash
-vagrant up k8s-master && vagrant up node-{1..2}
+vagrant up k8s-master && vagrant up
 ```
